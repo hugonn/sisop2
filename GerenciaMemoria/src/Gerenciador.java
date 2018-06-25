@@ -23,6 +23,7 @@ public class Gerenciador {
 		this.numPaginasMemoria = tamMemoria/tamPagina;
 		paginasMemoria = new LinkedList<Pagina>();
 		paginasDisco = new ArrayList<Pagina>(numPaginasDisco = tamDisco/tamPagina);
+		processos = new ArrayList<Processo>();
 		if(algoritmo.equalsIgnoreCase("lru"))
 			this.algoritmo = Algoritmo.LRU;
 		else {
@@ -39,18 +40,127 @@ public class Gerenciador {
 	}
 	
 	private void executaComando(String comando) {
+		System.out.print(comando + ": ");
 		Scanner sc = new Scanner(comando);
 		String selecao = sc.next();
 		switch(selecao) {
-		case "C": Resultado resultado = criaProcesso(sc.next(), sc.nextInt());
+		case "C":
+			String processo = sc.next();
+			int enderecos = sc.nextInt();
+			String estadoAnterior = estado();
+			Resultado resultado = criaProcesso(processo, enderecos);
+			switch(resultado) {
+			case SUCESSO:
+				System.out.println(paginasNecessarias(enderecos) +
+						" página(s) alocada(s) para o processo " + processo);
+				break;
+			case PAGE_FAULT:
+				System.out.print("PAGE FAULT" +
+						"\nAntes:\n" + estadoAnterior +
+						"Estado atual:\n" + estado());
+				break;
+			case NO_MEMORY:
+				System.out.println("NO MEMORY");
+				default:
+			}
 			break;
-		case "A": resultado = acessa(sc.next(), sc.nextInt());
+		case "A":
+			processo = sc.next();
+			int endereco = sc.nextInt();
+			estadoAnterior = estado();
+			resultado = acessa(processo, endereco);
+			switch(resultado) {
+			case SUCESSO:
+				System.out.println("Endereço " + endereco + " do processo " + processo + " acessado");
+				break;
+			case PAGE_FAULT:
+				System.out.print("PAGE FAULT" +
+						"\nAntes:\n" + estadoAnterior +
+						"Estado atual:\n" + estado());
+				break;
+			case SEGMENTATION_FAULT:
+				System.out.println("SEGMENTATION FAULT");
+				default:
+			}
 			break;
-		case "M": resultado = aloca(sc.next(), sc.nextInt());
+		case "M":
+			processo = sc.next();
+			enderecos = sc.nextInt();
+			Processo p = getProcesso(processo);
+			int numPaginas = p.getPaginas().size();
+			estadoAnterior = estado();
+			resultado = aloca(processo, enderecos);
+			switch(resultado) {
+			case SUCESSO:
+				System.out.println((p.getPaginas().size() - numPaginas) +
+						" página(s) alocada(s) para o processo " + processo);
+				break;
+			case PAGE_FAULT:
+				System.out.print("PAGE FAULT" +
+						"\nAntes:\n" + estadoAnterior +
+						"Estado atual:\n" + estado());
+				break;
+			case NO_MEMORY:
+				System.out.println("NO MEMORY");
+				default:
+			}
 			break;
-		case "T": terminaProcesso(sc.next());
+		case "T":
+			processo = sc.next();
+			terminaProcesso(processo);
+			System.out.println("Processo " + processo + " terminado");
 		}
 		sc.close();
+	}
+	
+	/*
+	 * Retorna o estado atual da memória e do disco
+	 */
+	private String estado() {
+		String memoria = "Memória:\n";
+		for(int i = 0; i < numPaginasMemoria; i++) {
+			memoria += "Página " + i + ": ";
+			if(posicoes[i]) { //Se a posição i da memória está ocupada
+				boolean paginaEncontrada = false;
+				for(Processo processo: processos) { //Procura em qual processo
+					ArrayList<Pagina> paginas = processo.getPaginas();
+					for(int j = 0; j < paginas.size(); j++) { //e em qual página está
+						Pagina pagina = paginas.get(j);
+						if(pagina.isEmMemoria() && pagina.getPosicao() == i) { //Deve estar em memória
+							memoria += "página " + j + " do processo " + processo.getId();
+							paginaEncontrada = true;
+							break;
+						}
+					}
+					if(paginaEncontrada)
+						break;
+				}
+			}
+			else //Se não está ocupada
+				memoria += "-";
+			memoria += "\n";
+		}
+		String disco = "Disco:\n";
+		int contador;
+		for(contador = 0; contador < paginasDisco.size(); contador++) { //Para cada página que está em disco 
+			disco += "Página " + contador + ": ";
+			Pagina pagina = paginasDisco.get(contador);
+			boolean paginaEncontrada = false;
+			for(Processo processo: processos) { //Procura em qual processo
+				ArrayList<Pagina> paginas = processo.getPaginas();
+				for(int i = 0; i < paginas.size(); i++) //e em qual página está
+					if(paginas.get(i).getPosicao() == pagina.getPosicao()) {
+						disco += "página " + i + " do processo " + processo.getId() + "\n";
+						paginaEncontrada = true;
+						break;
+					}
+				if(paginaEncontrada)
+					break;
+			}
+		}
+		for(; contador < numPaginasDisco; contador++) //Para as páginas em disco não ocupadas
+			disco += "Página " + contador + ": -\n";
+		return memoria + disco;
 	}
 	
 	public void addComando(String comando) { comandos.add(comando); }
@@ -70,6 +180,7 @@ public class Gerenciador {
 		paginasDisco.remove(pagina); //Se a página está em disco, retira a vítima da memória,
 		paginasDisco.add(vitima()); //coloca a vítima em disco, e carrega a página para a memória,
 		paginasMemoria.add(pagina); //efetuando o acesso
+		pagina.setEmMemoria(true);
 		return Resultado.PAGE_FAULT;
 	}
 	
@@ -95,14 +206,14 @@ public class Gerenciador {
 			vitima = paginasMemoria.poll();
 		else {
 			int escolha = seletor.nextInt(paginasMemoria.size());
-			int cont = 0;
+			int contador = 0;
 			for(Pagina pagina: paginasMemoria) {
-				if(cont == escolha) {
+				if(contador == escolha) {
 					vitima = pagina;
 					paginasMemoria.remove(pagina);
 					break;
 				}
-				cont++;
+				contador++;
 			}
 		}
 		vitima.setEmMemoria(false);
@@ -111,7 +222,8 @@ public class Gerenciador {
 	}
 	
 	private Resultado alocacao(Processo processo, int espaco) {
-		int paginasNecessarias = paginasNecessarias(espaco);
+		int paginasNecessariasInicialmente = paginasNecessarias(espaco);
+		int paginasNecessarias = paginasNecessariasInicialmente;
 		int paginasRestantes = paginasRestantes();
 		if(paginasNecessarias > paginasRestantes) { //Se não há páginas suficientes em memória
 			for(int i = 0; i < paginasRestantes; i++) { //Aloca todas as páginas disponíveis em memória
@@ -131,7 +243,8 @@ public class Gerenciador {
 					return Resultado.PAGE_FAULT; //avisa page fault
 				}
 			} //Se não alocou todas as páginas necessária, então faltou memória
-			processo.aloca(espaco - paginasNecessarias * tamPagina); //Aloca o máximo que foi possível
+			processo.aloca((paginasNecessariasInicialmente - paginasNecessarias)
+					* tamPagina); //Aloca o máximo que foi possível
 			return Resultado.NO_MEMORY; //e avisa que faltou memória
 		}
 		for(int i = 0; i < paginasNecessarias; i++) { //Se há páginas suficientes em memória,
@@ -144,7 +257,10 @@ public class Gerenciador {
 	}
 	
 	private Resultado criaProcesso(String id, int tamanho) {
-		Processo processo = new Processo(id, tamanho);
+		if(paginasMemoria.size() == numPaginasMemoria //Se memória está cheia
+				&& paginasDisco.size() == numPaginasDisco) //e disco está cheio
+			return Resultado.NO_MEMORY; //Avisa que não tem memória
+		Processo processo = new Processo(id);
 		processos.add(processo);
 		return alocacao(processo, tamanho);
 	}
@@ -154,7 +270,7 @@ public class Gerenciador {
 	 */
 	private Processo getProcesso(String id) {
 		for(Processo processo: processos)
-			if(processo.getId() == id) {
+			if(processo.getId().equals(id)) {
 				return processo;
 			}
 		return null;
@@ -180,7 +296,7 @@ public class Gerenciador {
 	private void terminaProcesso(String id) {
 		Processo processo = null;
 		for(int i = 0; i < processos.size(); i++)
-			if(processos.get(i).getId() == id) {
+			if(processos.get(i).getId().equals(id)) {
 				processo = processos.remove(i);
 				break;
 			}
@@ -200,6 +316,7 @@ public class Gerenciador {
 			if(posicoes[posicao] == false)
 				break;
 		Pagina pagina = new Pagina(posicao);
+		posicoes[posicao] = true;
 		return pagina;
 	}
 	

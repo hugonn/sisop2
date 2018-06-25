@@ -1,16 +1,16 @@
-import java.util.LinkedList;
+import java.util.ArrayList;
 
 public class Processo {
 	
 	private String id;
 	private int tamanho;
-	private LinkedList<Pagina> paginas;
+	private ArrayList<Pagina> paginas;
 	private boolean fragmentado; //true se o tamanho do processo é múltiplo do tamanho da página
 	
-	public Processo(String id, int tamanho) {
+	public Processo(String id) {
 		this.id = id;
-		this.tamanho = tamanho;
-		paginas = new LinkedList<Pagina>();
+		tamanho = 0;
+		paginas = new ArrayList<Pagina>();
 		fragmentado = fragmentacao();
 	}
 	
@@ -40,7 +40,7 @@ public class Processo {
 	
 	public int getTamanho() { return tamanho; }
 	
-	public LinkedList<Pagina> getPaginas() { return new LinkedList<Pagina>(paginas); }
+	public ArrayList<Pagina> getPaginas() { return new ArrayList<Pagina>(paginas); }
 	
 	/*
 	 * Retorna true se o tamanho do processo é múltiplo do tamanho da página,
