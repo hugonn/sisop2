@@ -14,12 +14,14 @@ public class Processo {
 		fragmentado = fragmentacao();
 	}
 	
-	public void addPagina(Pagina pagina) { paginas.add(pagina); }
-	
-	public void liberaPaginas() {
-		for(Pagina pagina: paginas)
-			pagina.setAlocada(false);
+	/*
+	 * Retorna a página correspondente ao endereço informado
+	 */
+	public Pagina getPagina(int endereco) {
+		return paginas.get(endereco/Gerenciador.getTamPagina());
 	}
+	
+	public void addPagina(Pagina pagina) { paginas.add(pagina); }
 	
 	/*
 	 * Retorna o número de endereços que estão alocados para o processo

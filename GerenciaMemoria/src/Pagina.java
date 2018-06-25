@@ -1,24 +1,22 @@
 
 public class Pagina {
 	
-	private int id;
+	private int posicao; //A posição 0 representa os enderços de 0 até tamPagina - 1;
+	//a posição 1, os endereços de tamPagina até 2*tamPagina - 1, e assim por diante
+	//(tamPagina é definido na classe Gerenciado)
 	private boolean emMemoria; //true se está em memória, e false se está em disco 
-	private boolean alocada; //true se pertence a algum processo, e false caso contrário
 	
-	public Pagina(int id) {
-		this.id = id;
+	public Pagina(int posicao) {
+		setPosicao(posicao);
 		setEmMemoria(true);
-		setAlocada(true);
 	}
 	
-	public int getId() { return id; }
+	public void setPosicao(int posicao) { this.posicao = posicao; }
+	
+	public int getPosicao() { return posicao; }
 	
 	public boolean isEmMemoria() { return emMemoria; }
 	
-	public boolean isAlocada() { return alocada; }
-	
 	public void setEmMemoria(boolean emMemoria) { this.emMemoria = emMemoria; }
-	
-	public void setAlocada(boolean alocada) { this.alocada = alocada; }
 	
 }
