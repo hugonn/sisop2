@@ -2,6 +2,7 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.Queue;
 import java.util.Random;
+import java.util.Scanner;
 
 public class Gerenciador {
 	
@@ -15,10 +16,11 @@ public class Gerenciador {
 	private Random seletor; //Objeto que seleciona uma página aleatoriamente, para o caso do algoritmo aleatório
 	private boolean[] posicoes; //Representa a ordem das páginas na memória física
 	//Se a posição 0 é true, então a primeira página da memória está ocupada, e assim por diante
+	private LinkedList<String> comandos; //Lista de comandos para o caso do modo sequencial de execução
 	
-	public Gerenciador(int tamPagina, int tamMemoriaFisica, int tamDisco, String algoritmo) {
+	public Gerenciador(int tamPagina, int tamMemoria, int tamDisco, String algoritmo) {
 		Gerenciador.tamPagina = tamPagina;
-		this.numPaginasMemoria = tamMemoriaFisica/tamPagina;
+		this.numPaginasMemoria = tamMemoria/tamPagina;
 		paginasMemoria = new LinkedList<Pagina>();
 		paginasDisco = new ArrayList<Pagina>(numPaginasDisco = tamDisco/tamPagina);
 		if(algoritmo.equalsIgnoreCase("lru"))
@@ -30,7 +32,32 @@ public class Gerenciador {
 		posicoes = new boolean[numPaginasMemoria];
 	}
 	
-	public Resultado acessa(String id, int endereco) {
+	public void executa() {
+		if(comandos != null)
+			for(String comando: comandos)
+				executaComando(comando);
+	}
+	
+	private void executaComando(String comando) {
+		Scanner sc = new Scanner(comando);
+		String selecao = sc.next();
+		switch(selecao) {
+		case "C": Resultado resultado = criaProcesso(sc.next(), sc.nextInt());
+			break;
+		case "A": resultado = acessa(sc.next(), sc.nextInt());
+			break;
+		case "M": resultado = aloca(sc.next(), sc.nextInt());
+			break;
+		case "T": terminaProcesso(sc.next());
+		}
+		sc.close();
+	}
+	
+	public void addComando(String comando) { comandos.add(comando); }
+	
+	public void inicializaComandos() { comandos = new LinkedList<String>(); }
+	
+	private Resultado acessa(String id, int endereco) {
 		Processo processo = getProcesso(id);
 		if(endereco >= processo.getTamanho()) //Endereço fora da área de acesso
 			return Resultado.SEGMENTATION_FAULT;
@@ -49,14 +76,14 @@ public class Gerenciador {
 	/*
 	 * Retorna o número de páginas necessárias para alocar n endereços de memória
 	 */
-	public int paginasNecessarias(int enderecos) {
+	private int paginasNecessarias(int enderecos) {
 		return (int) Math.ceil((double) enderecos/tamPagina);
 	}
 	
 	/*
 	 * Retorna o número restante de páginas em memória
 	 */
-	public int paginasRestantes() { return numPaginasMemoria - paginasMemoria.size(); }
+	private int paginasRestantes() { return numPaginasMemoria - paginasMemoria.size(); }
 	
 	/*
 	 * Seleciona e remove a vítima da fila de páginas, com base ou no LRU, ou no algoritmo
@@ -116,8 +143,9 @@ public class Gerenciador {
 		return Resultado.SUCESSO;
 	}
 	
-	public Resultado criaProcesso(String id, int tamanho) {
+	private Resultado criaProcesso(String id, int tamanho) {
 		Processo processo = new Processo(id, tamanho);
+		processos.add(processo);
 		return alocacao(processo, tamanho);
 	}
 	
@@ -132,7 +160,7 @@ public class Gerenciador {
 		return null;
 	}
 	
-	public Resultado aloca(String id, int espaco) {
+	private Resultado aloca(String id, int espaco) {
 		Processo processo = getProcesso(id);
 		if(processo.isFragmentado()) { //Se o número de endereços alocados pelo processo não é múltiplo do 
 			int enderecosFragmentados = processo.enderecosFragmentados(); //tamanho da página, então aloca
@@ -149,7 +177,7 @@ public class Gerenciador {
 	/*
 	 * Retira o processo da lista de processos, bem como suas respectivas páginas
 	 */
-	public void terminaProcesso(String id) {
+	private void terminaProcesso(String id) {
 		Processo processo = null;
 		for(int i = 0; i < processos.size(); i++)
 			if(processos.get(i).getId() == id) {
