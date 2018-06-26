@@ -1,5 +1,7 @@
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Queue;
 import java.util.Random;
 import java.util.Scanner;
@@ -13,10 +15,14 @@ public class Gerenciador {
 	private ArrayList<Pagina> paginasDisco;
 	private ArrayList<Processo> processos;
 	private Algoritmo algoritmo; //LRU ou aleatório
-	private Random seletor; //Objeto que seleciona uma página aleatoriamente, para o caso do algoritmo aleatório
+	private Random seletor; //Objeto que seleciona aleatoriamente
 	private boolean[] posicoes; //Representa a ordem das páginas na memória física
 	//Se a posição 0 é true, então a primeira página da memória está ocupada, e assim por diante
-	private LinkedList<String> comandos; //Lista de comandos para o caso do modo sequencial de execução
+	private static List<String> comandos; //Lista de comandos a serem executados
+	private int numThreads = 5; //Número de threads criadas para o caso do modo aleatório
+	public static final int enderecoLimite = 32; //Número máximo de endereços solicitados pela thread aleatória
+	private ArrayList<Thread> threads;
+	private static int threadsTerminadas; //Número de threads que já terminaram
 	
 	public Gerenciador(int tamPagina, int tamMemoria, int tamDisco, String algoritmo) {
 		Gerenciador.tamPagina = tamPagina;
@@ -33,12 +39,48 @@ public class Gerenciador {
 		posicoes = new boolean[numPaginasMemoria];
 	}
 	
+	/*
+	 * Método que faz a execução dos comandos
+	 * tanto no modo aleatório quanto no sequencial
+	 */
 	public void executa() {
-		if(comandos != null)
-			for(String comando: comandos)
-				executaComando(comando);
+		if(comandos != null) //Se já existe uma lista de comando pré-definida 
+			for(String comando: comandos) //Então é o modo sequencial
+				executaComando(comando); //Executa todos os comandos em sequência
+		else { //Caso contrário
+			threads = new ArrayList<Thread>(numThreads); //Cria threads
+			int limite = numThreads;
+			for(int i = 1; i <= limite; i++) {
+				String id = "p" + i;
+				int numProcessos = processos.size();
+				executaComando("C " + id + " " + (seletor.nextInt(enderecoLimite) + 1));
+				if(processos.size() > numProcessos) //Só cria a thread se o processo pode ser criado
+					threads.add(new Thread(new ProcessoThread(id)));
+				else
+					numThreads--;
+			}
+			inicializaComandos();
+			for(Thread thread: threads)
+				thread.start(); //E as executa
+			while(threadsTerminadas < numThreads || !comandos.isEmpty()) { //Até que todas terminem
+				if(!comandos.isEmpty()) { //e não haja mais comandos para executar
+					String comando = comandos.get(0);
+					executaComando(comando);
+					comandos.remove(0);
+				}
+			}
+		}
 	}
 	
+	/*
+	 * Indica que uma thread terminou
+	 */
+	public static void terminaThread() { threadsTerminadas++; }
+	
+	/*
+	 * Método que recebe o comando e chama os outros métodos que o executam
+	 * de acordo com o processo informado, e com tamanho/endereço, se for o caso
+	 */
 	private void executaComando(String comando) {
 		System.out.print(comando + ": ");
 		Scanner sc = new Scanner(comando);
@@ -165,9 +207,9 @@ public class Gerenciador {
 		return memoria + disco;
 	}
 	
-	public void addComando(String comando) { comandos.add(comando); }
+	public static void addComando(String comando) { comandos.add(comando); }
 	
-	public void inicializaComandos() { comandos = new LinkedList<String>(); }
+	public void inicializaComandos() { comandos = Collections.synchronizedList(new LinkedList<String>()); }
 	
 	private Resultado acessa(String id, int endereco) {
 		Processo processo = getProcesso(id);
@@ -179,15 +221,31 @@ public class Gerenciador {
 			paginasMemoria.add(pagina);
 			return Resultado.SUCESSO;
 		}
-		Pagina vitima = vitima();
-		paginasDisco.remove(pagina); //Se a página está em disco, retira a vítima da memória,
-		paginasDisco.add(vitima); //coloca a vítima em disco, e carrega a página para a memória,
-		paginasMemoria.add(pagina); //efetuando o acesso
-		int posicao = vitima.getPosicao();
-		pagina.setPosicao(posicao); //A página recebe o lugar da vítima
-		posicoes[posicao] = true;
-		pagina.setEmMemoria(true);
+		trazParaMemoria(pagina); //Se a página está em disco, traz para a memória
 		return Resultado.PAGE_FAULT;
+	}
+	
+	/*
+	 * Método que traz a página informado do disco para a memória
+	 */
+	private void trazParaMemoria(Pagina pagina) {
+		paginasDisco.remove(pagina);
+		if(paginasMemoria.size() == numPaginasMemoria) { //Se memória está cheia,
+			Pagina vitima = vitima(); //retira a vítima da memória,
+			paginasDisco.add(vitima); //coloca a vítima em disco
+			int posicao = vitima.getPosicao();
+			pagina.setPosicao(posicao); //A página recebe o lugar da vítima
+			posicoes[posicao] = true;
+		} else { //Se há espaço na memória
+			int posicao;
+			for(posicao = 0; posicao < posicoes.length; posicao++)
+				if(posicoes[posicao] == false) //Encontra o primeiro lugar livre
+					break;
+			pagina.setPosicao(posicao);
+			posicoes[posicao] = true;
+		}
+		paginasMemoria.add(pagina);
+		pagina.setEmMemoria(true);
 	}
 	
 	/*
@@ -286,8 +344,12 @@ public class Gerenciador {
 		Processo processo = getProcesso(id);
 		if(processo.isFragmentado()) { //Se o número de endereços alocados pelo processo não é múltiplo do
 			Pagina pagina = processo.getPagina(processo.getTamanho()); //tamanho da página, então aloca
-			paginasMemoria.remove(pagina); //memória até que seja, ou até alocar todo o espaço desejado
-			paginasMemoria.add(pagina); //Atualiza posição da página na fila
+			if(pagina.isEmMemoria()) { //memória até que seja, ou até alocar todo o espaço desejado
+				paginasMemoria.remove(pagina); //Atualiza posição da página na fila
+				paginasMemoria.add(pagina); //caso esteja em memória
+			} else { //Caso contrário
+				trazParaMemoria(pagina); //Traz a página para a memória
+			}
 			int enderecosFragmentados = processo.enderecosFragmentados();
 			if(enderecosFragmentados >= espaco) {
 				processo.aloca(espaco);

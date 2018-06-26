@@ -12,6 +12,10 @@ public class Main {
 		gerenciador.executa();
 	}
 	
+	/*
+	 * Método que faz a leitura do arquivo de entrada e preenche
+	 * as estruturas do objeto com os parâmetros informados
+	 */
 	private static Gerenciador leitura(String arquivo) {
 		Gerenciador gerenciador = null;
 		Path path = Paths.get(arquivo);
@@ -26,7 +30,7 @@ public class Main {
 				gerenciador.inicializaComandos();
 				String comando = null;
 				while((comando = br.readLine()) != null)
-					gerenciador.addComando(comando);
+					Gerenciador.addComando(comando);
 			}
 		}
 		catch (IOException x) {
