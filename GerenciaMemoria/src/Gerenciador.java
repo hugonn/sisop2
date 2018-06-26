@@ -148,12 +148,14 @@ public class Gerenciador {
 			boolean paginaEncontrada = false;
 			for(Processo processo: processos) { //Procura em qual processo
 				ArrayList<Pagina> paginas = processo.getPaginas();
-				for(int i = 0; i < paginas.size(); i++) //e em qual página está
-					if(paginas.get(i).getPosicao() == pagina.getPosicao()) {
+				for(int i = 0; i < paginas.size(); i++) { //e em qual página está
+					Pagina candidata = paginas.get(i); //A página deve estar em disco
+					if(!candidata.isEmMemoria() && candidata.getPosicao() == pagina.getPosicao()) {
 						disco += "página " + i + " do processo " + processo.getId() + "\n";
 						paginaEncontrada = true;
 						break;
 					}
+				}
 				if(paginaEncontrada)
 					break;
 			}
@@ -177,9 +179,13 @@ public class Gerenciador {
 			paginasMemoria.add(pagina);
 			return Resultado.SUCESSO;
 		}
+		Pagina vitima = vitima();
 		paginasDisco.remove(pagina); //Se a página está em disco, retira a vítima da memória,
-		paginasDisco.add(vitima()); //coloca a vítima em disco, e carrega a página para a memória,
+		paginasDisco.add(vitima); //coloca a vítima em disco, e carrega a página para a memória,
 		paginasMemoria.add(pagina); //efetuando o acesso
+		int posicao = vitima.getPosicao();
+		pagina.setPosicao(posicao); //A página recebe o lugar da vítima
+		posicoes[posicao] = true;
 		pagina.setEmMemoria(true);
 		return Resultado.PAGE_FAULT;
 	}
@@ -242,7 +248,7 @@ public class Gerenciador {
 					processo.aloca(espaco); //Atualiza o espaço alocado e
 					return Resultado.PAGE_FAULT; //avisa page fault
 				}
-			} //Se não alocou todas as páginas necessária, então faltou memória
+			} //Se não alocou todas as páginas necessárias, então faltou memória
 			processo.aloca((paginasNecessariasInicialmente - paginasNecessarias)
 					* tamPagina); //Aloca o máximo que foi possível
 			return Resultado.NO_MEMORY; //e avisa que faltou memória
@@ -278,9 +284,12 @@ public class Gerenciador {
 	
 	private Resultado aloca(String id, int espaco) {
 		Processo processo = getProcesso(id);
-		if(processo.isFragmentado()) { //Se o número de endereços alocados pelo processo não é múltiplo do 
-			int enderecosFragmentados = processo.enderecosFragmentados(); //tamanho da página, então aloca
-			if(enderecosFragmentados >= espaco) { //memória até que seja, ou até alocar todo o espaço desejado
+		if(processo.isFragmentado()) { //Se o número de endereços alocados pelo processo não é múltiplo do
+			Pagina pagina = processo.getPagina(processo.getTamanho()); //tamanho da página, então aloca
+			paginasMemoria.remove(pagina); //memória até que seja, ou até alocar todo o espaço desejado
+			paginasMemoria.add(pagina); //Atualiza posição da página na fila
+			int enderecosFragmentados = processo.enderecosFragmentados();
+			if(enderecosFragmentados >= espaco) {
 				processo.aloca(espaco);
 				return Resultado.SUCESSO;
 			}
